@@ -1,0 +1,12 @@
+{
+  "name": "studio-bookings",
+  "version": "1.0.0",
+  "description": "Podcast studio booking manager",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

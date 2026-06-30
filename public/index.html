@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Bookings</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #141418; --surface: #1e1e24; --border: #2a2a32;
+    --text: #e0e0e6; --text-dim: #8888a0; --text-faint: #5a5a70;
+    --accent: #4a3aff; --accent-glow: rgba(74,58,255,0.15);
+    --green: #1a7a4c; --amber: #c47f17; --gray: #6b7280;
+    --danger-bg: #3a1010; --danger: #f87171; --danger-border: #5a2020;
+    --radius: 8px; --radius-lg: 12px;
+    --font-body: 'Inter', -apple-system, system-ui, sans-serif;
+    --font-display: 'Georgia', serif;
+  }
+
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--font-body);
+    font-size: 14px; min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .header h1 {
+    font-family: var(--font-display); font-size: 22px; font-weight: 400;
+    color: #f5f5f7; letter-spacing: -0.5px;
+  }
+  .header .sub { margin-top: 4px; font-size: 12px; color: var(--text-dim); }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* Buttons */
+  .btn {
+    border: none; border-radius: var(--radius); cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 500; padding: 6px 14px;
+  }
+  .btn-ghost { background: #2a2a35; color: #b0b0c0; border: 1px solid #3a3a48; }
+  .btn-ghost:hover { background: #33333f; }
+  .btn-primary { background: var(--accent); color: #fff; font-weight: 600; }
+  .btn-primary:hover { background: #5a4cff; }
+  .btn-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+
+  .toggle-group {
+    display: flex; background: #2a2a35; border-radius: var(--radius);
+    border: 1px solid #3a3a48; overflow: hidden;
+  }
+  .toggle-group button {
+    background: transparent; color: var(--text-dim); border: none;
+    padding: 6px 16px; font-size: 12px; cursor: pointer; font-weight: 500; text-transform: capitalize;
+  }
+  .toggle-group button.active { background: var(--accent); color: #fff; }
+
+  /* Nav */
+  .nav-bar {
+    display: flex; align-items: center; justify-content: space-between; padding: 12px 24px;
+  }
+  .nav-btn {
+    background: none; border: 1px solid #2a2a35; color: var(--text-dim);
+    width: 32px; height: 32px; border-radius: var(--radius); font-size: 18px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:hover { background: #22222c; }
+  .nav-label { font-size: 14px; font-weight: 500; color: #c0c0d0; }
+
+  /* Week grid */
+  .week-grid {
+    display: grid; grid-template-columns: 56px repeat(7, 1fr);
+    min-width: 720px; gap: 0;
+  }
+  .week-grid-wrapper { overflow-x: auto; padding: 0 12px 24px; }
+  .day-header {
+    text-align: center; padding: 8px 4px; cursor: pointer; border-radius: 10px;
+    transition: background 0.15s;
+  }
+  .day-header:hover { background: rgba(255,255,255,0.04); }
+  .day-header.today { background: var(--accent-glow); }
+  .day-header .dow { font-size: 10px; color: #6a6a80; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .day-header .date { font-size: 18px; font-weight: 600; margin-top: 2px; color: #d0d0dc; }
+  .day-header.today .date { color: #7b6fff; }
+
+  .time-label {
+    font-size: 10px; color: var(--text-faint); text-align: right; padding-right: 8px;
+    padding-top: 4px; font-variant-numeric: tabular-nums;
+  }
+  .slot {
+    border-top: 1px solid #22222c; min-height: 40px; padding: 2px; cursor: pointer;
+    transition: background 0.1s;
+  }
+  .slot:hover { background: rgba(255,255,255,0.02); }
+  .slot.occupied { background: rgba(74,58,255,0.04); cursor: default; }
+
+  .booking-chip {
+    background: linear-gradient(135deg, #3a2edd 0%, #5a4aff 100%);
+    color: #fff; border-radius: 6px; padding: 3px 6px; font-size: 11px;
+    cursor: pointer; font-weight: 500; line-height: 1.3; overflow: hidden;
+    position: relative; z-index: 2;
+  }
+  .booking-chip .chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .booking-chip .chip-hours { font-size: 9px; opacity: 0.7; margin-top: 1px; }
+
+  .border-confirmed { border-left: 3px solid var(--green); }
+  .border-pending { border-left: 3px solid var(--amber); }
+  .border-cancelled { border-left: 3px solid var(--gray); }
+
+  /* Day view */
+  .day-summary {
+    margin-bottom: 16px; padding: 12px 16px; background: var(--surface);
+    border-radius: var(--radius-lg); border: 1px solid #2a2a35;
+  }
+  .day-summary-title { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+  .day-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .day-row:last-child { border-bottom: none; }
+  .day-row-name { font-weight: 600; color: #e0e0e8; }
+  .day-row-time { color: #6a6a80; margin-left: 8px; font-size: 12px; }
+
+  .hour-row { display: flex; gap: 16px; border-top: 1px solid #22222c; min-height: 52px; padding: 4px 0; }
+  .hour-row-label {
+    width: 64px; font-size: 12px; color: var(--text-faint); padding-top: 4px;
+    font-variant-numeric: tabular-nums; flex-shrink: 0;
+  }
+  .hour-row-body { flex: 1; }
+  .hour-row .add-hint { font-size: 12px; color: #3a3a48; padding-top: 6px; cursor: pointer; }
+  .hour-row .add-hint:hover { color: #5a5a70; }
+
+  .booking-card {
+    background: linear-gradient(135deg, #3a2edd, #5a4aff);
+    border-radius: 10px; padding: 10px 14px; cursor: pointer; margin-bottom: 4px;
+  }
+  .booking-card-top { display: flex; justify-content: space-between; align-items: center; }
+  .booking-card-name { font-weight: 600; color: #fff; }
+  .booking-card-meta { font-size: 12px; color: rgba(255,255,255,0.65); margin-top: 4px; }
+
+  /* Badge */
+  .badge {
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-confirmed { background: var(--green); color: #fff; }
+  .badge-pending { background: var(--amber); color: #fff; }
+  .badge-cancelled { background: var(--gray); color: #fff; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+  .modal {
+    background: var(--surface); border-radius: 16px; padding: 28px;
+    width: 90%; max-width: 420px; border: 1px solid #2e2e38;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+  }
+  .modal h2 {
+    font-family: var(--font-display); font-size: 18px; font-weight: 400;
+    margin-bottom: 20px; color: #f0f0f5;
+  }
+  .modal .slot-info { font-size: 12px; color: #7a7a90; margin-bottom: 16px; }
+
+  .field-label {
+    font-size: 11px; color: #6a6a80; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.8px; display: block; margin-bottom: 4px;
+  }
+  .field-input, .field-select, .field-textarea {
+    width: 100%; background: var(--bg); border: 1px solid #2e2e3a; border-radius: var(--radius);
+    padding: 8px 12px; color: var(--text); font-size: 13px; margin-bottom: 12px;
+    outline: none; font-family: inherit;
+  }
+  .field-input:focus, .field-select:focus, .field-textarea:focus { border-color: var(--accent); }
+  .field-textarea { resize: vertical; }
+  .field-row { display: flex; gap: 12px; }
+  .field-row > div { flex: 1; }
+
+  .modal-actions {
+    display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end;
+  }
+  .modal-actions .btn { padding: 8px 16px; font-size: 13px; }
+  .modal-actions .btn-delete { margin-right: auto; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #2a2a35; color: var(--text); padding: 10px 20px;
+    border-radius: 10px; font-size: 13px; z-index: 200;
+    border: 1px solid #3a3a48; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    animation: fadeIn 0.2s ease;
+  }
+  .toast.error { border-color: var(--danger-border); color: var(--danger); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+
+  .day-content { padding: 0 24px 24px; }
+
+  @media (max-width: 600px) {
+    .header { padding: 16px; }
+    .nav-bar { padding: 12px 16px; }
+    .day-content { padding: 0 16px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 8);
+const SLOT_LABELS = HOURS.map(h => {
+  const suffix = h >= 12 ? "PM" : "AM";
+  const display = h > 12 ? h - 12 : h;
+  return display + ":00 " + suffix;
+});
+const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+let state = {
+  bookings: [],
+  view: "week",
+  currentDate: new Date(),
+  selectedDay: new Date(),
+  modal: null, // null | "new" | booking object
+  selectedSlot: null,
+  form: { name:"", email:"", phone:"", hours:1, status:"confirmed", notes:"" },
+  toast: null,
+};
+
+function dateKey(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function isToday(d) { return dateKey(d) === dateKey(new Date()); }
+function getWeekDates(base) {
+  const d = new Date(base); const day = d.getDay();
+  const start = new Date(d); start.setDate(d.getDate() - day);
+  return Array.from({length:7}, (_,i) => { const x = new Date(start); x.setDate(start.getDate()+i); return x; });
+}
+
+// API
+async function api(path, opts) {
+  const res = await fetch(path, { headers: {"Content-Type":"application/json"}, ...opts });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+async function loadBookings() {
+  const week = getWeekDates(state.currentDate);
+  const start = dateKey(week[0]); const end = dateKey(week[6]);
+  // Load extra for day view
+  const dayStr = dateKey(state.selectedDay);
+  const rangeStart = start < dayStr ? start : dayStr;
+  const rangeEnd = end > dayStr ? end : dayStr;
+  try {
+    state.bookings = await api(`/api/bookings?start=${rangeStart}&end=${rangeEnd}`);
+  } catch(e) { showToast(e.message, true); }
+  render();
+}
+
+function showToast(msg, isError) {
+  state.toast = { msg, isError };
+  render();
+  setTimeout(() => { state.toast = null; render(); }, 3000);
+}
+
+function getBookingsForDate(d) {
+  const k = dateKey(d);
+  return state.bookings.filter(b => b.date === k);
+}
+function getBookingsForSlot(d, hour) {
+  return getBookingsForDate(d).filter(b => b.start_hour <= hour && hour < b.start_hour + b.hours);
+}
+
+function openNew(d, hour) {
+  state.selectedSlot = { date: d, hour };
+  state.form = { name:"", email:"", phone:"", hours:1, status:"confirmed", notes:"" };
+  state.modal = "new";
+  render();
+}
+function openEdit(booking, d) {
+  state.selectedSlot = { date: d, hour: booking.start_hour };
+  state.form = { name:booking.name, email:booking.email, phone:booking.phone, hours:booking.hours, status:booking.status, notes:booking.notes };
+  state.modal = booking;
+  render();
+}
+function closeModal() { state.modal = null; render(); }
+
+async function handleSave() {
+  if (!state.form.name.trim()) return;
+  const slot = state.selectedSlot;
+  try {
+    if (state.modal === "new") {
+      await api("/api/bookings", {
+        method: "POST",
+        body: JSON.stringify({ date: dateKey(slot.date), name: state.form.name, email: state.form.email, phone: state.form.phone, start_hour: slot.hour, hours: state.form.hours, status: state.form.status, notes: state.form.notes })
+      });
+      showToast("Booking created");
+    } else {
+      await api(`/api/bookings/${state.modal.id}`, {
+        method: "PUT",
+        body: JSON.stringify(state.form)
+      });
+      showToast("Booking updated");
+    }
+    closeModal();
+    loadBookings();
+  } catch(e) { showToast(e.message, true); }
+}
+
+async function handleDelete() {
+  try {
+    await api(`/api/bookings/${state.modal.id}`, { method: "DELETE" });
+    showToast("Booking deleted");
+    closeModal();
+    loadBookings();
+  } catch(e) { showToast(e.message, true); }
+}
+
+function setView(v) { state.view = v; if (v==="day") state.selectedDay = new Date(state.currentDate); loadBookings(); }
+function navWeek(dir) { state.currentDate.setDate(state.currentDate.getDate() + dir*7); state.currentDate = new Date(state.currentDate); loadBookings(); }
+function navDay(dir) { state.selectedDay.setDate(state.selectedDay.getDate() + dir); state.selectedDay = new Date(state.selectedDay); loadBookings(); }
+function goToday() { state.currentDate = new Date(); state.selectedDay = new Date(); loadBookings(); }
+function selectDay(d) { state.selectedDay = new Date(d); state.view = "day"; loadBookings(); }
+
+// Render
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  if (attrs) Object.entries(attrs).forEach(([k,v]) => {
+    if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === "className") el.className = v;
+    else if (k === "value") el.value = v;
+    else if (k === "selected") { if(v) el.selected = true; }
+    else el.setAttribute(k, v);
+  });
+  children.flat(Infinity).forEach(c => {
+    if (c == null || c === false) return;
+    el.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(c) : c);
+  });
+  return el;
+}
+
+function badge(status) {
+  return h("span", { className: `badge badge-${status}` }, status);
+}
+
+function renderWeekView() {
+  const week = getWeekDates(state.currentDate);
+  const nav = h("div", { className: "nav-bar" },
+    h("button", { className: "nav-btn", onClick: () => navWeek(-1) }, "‹"),
+    h("span", { className: "nav-label" },
+      MONTHS[week[0].getMonth()] + " " + week[0].getDate() + " – " +
+      (week[6].getMonth()!==week[0].getMonth() ? MONTHS[week[6].getMonth()]+" " : "") +
+      week[6].getDate() + ", " + week[6].getFullYear()
+    ),
+    h("button", { className: "nav-btn", onClick: () => navWeek(1) }, "›"),
+  );
+
+  const grid = h("div", { className: "week-grid" });
+  // header row
+  grid.appendChild(h("div"));
+  week.forEach(d => {
+    const hdr = h("div", { className: "day-header" + (isToday(d) ? " today" : ""), onClick: () => selectDay(d) },
+      h("div", { className: "dow" }, DAYS[d.getDay()]),
+      h("div", { className: "date" }, String(d.getDate()))
+    );
+    grid.appendChild(hdr);
+  });
+
+  // time rows
+  HOURS.forEach((hour, hi) => {
+    grid.appendChild(h("div", { className: "time-label" }, SLOT_LABELS[hi]));
+    week.forEach(d => {
+      const slotBookings = getBookingsForSlot(d, hour);
+      const startsHere = slotBookings.filter(b => b.start_hour === hour);
+      const cell = h("div", {
+        className: "slot" + (slotBookings.length ? " occupied" : ""),
+        onClick: () => { if (!slotBookings.length) openNew(d, hour); }
+      });
+      startsHere.forEach(b => {
+        const chip = h("div", {
+          className: "booking-chip border-" + b.status,
+          style: b.hours > 1 ? { height: (b.hours * 40 - 4) + "px" } : {},
+          onClick: (e) => { e.stopPropagation(); openEdit(b, d); }
+        },
+          h("div", { className: "chip-name" }, b.name),
+          b.hours > 1 ? h("div", { className: "chip-hours" }, b.hours + "h") : null
+        );
+        cell.appendChild(chip);
+      });
+      grid.appendChild(cell);
+    });
+  });
+
+  return h("div", null,
+    nav,
+    h("div", { className: "week-grid-wrapper" }, grid)
+  );
+}
+
+function renderDayView() {
+  const d = state.selectedDay;
+  const dayBookings = getBookingsForDate(d);
+
+  const nav = h("div", { className: "nav-bar" },
+    h("button", { className: "nav-btn", onClick: () => navDay(-1) }, "‹"),
+    h("span", { className: "nav-label" },
+      DAYS[d.getDay()] + ", " + MONTHS[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear()
+    ),
+    h("button", { className: "nav-btn", onClick: () => navDay(1) }, "›"),
+  );
+
+  const parts = [nav];
+
+  // Summary card
+  if (dayBookings.length) {
+    const summary = h("div", { className: "day-summary" },
+      h("div", { className: "day-summary-title" }, "Bookings today")
+    );
+    dayBookings.forEach(b => {
+      summary.appendChild(h("div", { className: "day-row", onClick: () => openEdit(b, d) },
+        h("div", null,
+          h("span", { className: "day-row-name" }, b.name),
+          h("span", { className: "day-row-time" }, SLOT_LABELS[b.start_hour - 8] + " · " + b.hours + "h")
+        ),
+        badge(b.status)
+      ));
+    });
+    parts.push(summary);
+  }
+
+  // Hour slots
+  HOURS.forEach((hour, hi) => {
+    const slotBookings = getBookingsForSlot(d, hour);
+    const startsHere = slotBookings.filter(b => b.start_hour === hour);
+    const body = h("div", { className: "hour-row-body" });
+
+    startsHere.forEach(b => {
+      const card = h("div", {
+        className: "booking-card border-" + b.status,
+        onClick: (e) => { e.stopPropagation(); openEdit(b, d); }
+      },
+        h("div", { className: "booking-card-top" },
+          h("span", { className: "booking-card-name" }, b.name),
+          badge(b.status)
+        ),
+        h("div", { className: "booking-card-meta" },
+          b.hours + "h" + (b.phone ? " · " + b.phone : "") + (b.notes ? " · " + b.notes : "")
+        )
+      );
+      body.appendChild(card);
+    });
+
+    if (!slotBookings.length) {
+      body.appendChild(h("div", {
+        className: "add-hint",
+        onClick: () => openNew(d, hour)
+      }, "+ Add booking"));
+    }
+
+    parts.push(h("div", { className: "hour-row", onClick: () => { if (!slotBookings.length) openNew(d, hour); } },
+      h("div", { className: "hour-row-label" }, SLOT_LABELS[hi]),
+      body
+    ));
+  });
+
+  return h("div", { className: "day-content" }, ...parts);
+}
+
+function renderModal() {
+  if (!state.modal) return null;
+  const isNew = state.modal === "new";
+  const slot = state.selectedSlot;
+
+  function input(field, placeholder, type) {
+    const el = h("input", { className: "field-input", placeholder, type: type||"text", value: state.form[field] });
+    el.addEventListener("input", e => { state.form[field] = e.target.value; });
+    return el;
+  }
+  function select(field, options) {
+    const el = h("select", { className: "field-select" });
+    options.forEach(([val, label]) => {
+      const opt = h("option", { value: val }, label);
+      if (state.form[field] == val) opt.selected = true;
+      el.appendChild(opt);
+    });
+    el.addEventListener("change", e => {
+      state.form[field] = field === "hours" ? +e.target.value : e.target.value;
+    });
+    return el;
+  }
+
+  const textarea = h("textarea", { className: "field-textarea", placeholder: "Equipment needs, special requests...", rows: "2", value: state.form.notes });
+  textarea.addEventListener("input", e => { state.form.notes = e.target.value; });
+
+  const actions = h("div", { className: "modal-actions" });
+  if (!isNew) actions.appendChild(h("button", { className: "btn btn-danger btn-delete", onClick: handleDelete }, "Delete"));
+  actions.appendChild(h("button", { className: "btn btn-ghost", onClick: closeModal }, "Cancel"));
+  actions.appendChild(h("button", { className: "btn btn-primary", onClick: handleSave }, "Save"));
+
+  const overlay = h("div", { className: "modal-overlay", onClick: closeModal },
+    h("div", { className: "modal", onClick: e => e.stopPropagation() },
+      h("h2", null, isNew ? "New Booking" : "Edit Booking"),
+      h("div", { className: "slot-info" },
+        DAYS[slot.date.getDay()] + ", " + MONTHS[slot.date.getMonth()] + " " + slot.date.getDate() + " at " + SLOT_LABELS[slot.hour - 8]
+      ),
+      h("label", { className: "field-label" }, "Client name *"),
+      input("name", "Name"),
+      h("label", { className: "field-label" }, "Email"),
+      input("email", "email@example.com", "email"),
+      h("label", { className: "field-label" }, "Phone"),
+      input("phone", "+91 98765 43210", "tel"),
+      h("div", { className: "field-row" },
+        h("div", null,
+          h("label", { className: "field-label" }, "Duration"),
+          select("hours", [[1,"1 hour"],[2,"2 hours"],[3,"3 hours"],[4,"4 hours"],[5,"5 hours"],[6,"6 hours"]])
+        ),
+        h("div", null,
+          h("label", { className: "field-label" }, "Status"),
+          select("status", [["confirmed","Confirmed"],["pending","Pending"],["cancelled","Cancelled"]])
+        )
+      ),
+      h("label", { className: "field-label" }, "Notes"),
+      textarea,
+      actions
+    )
+  );
+  return overlay;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+
+  // Header
+  const header = h("div", { className: "header" },
+    h("div", null,
+      h("h1", null, "Studio Bookings"),
+      h("p", { className: "sub" }, "Podcast studio rental management")
+    ),
+    h("div", { className: "header-actions" },
+      h("button", { className: "btn btn-ghost", onClick: goToday }, "Today"),
+      h("div", { className: "toggle-group" },
+        h("button", { className: state.view==="week" ? "active" : "", onClick: () => setView("week") }, "Week"),
+        h("button", { className: state.view==="day" ? "active" : "", onClick: () => setView("day") }, "Day"),
+      )
+    )
+  );
+  app.appendChild(header);
+
+  if (state.view === "week") app.appendChild(renderWeekView());
+  else app.appendChild(renderDayView());
+
+  const modal = renderModal();
+  if (modal) app.appendChild(modal);
+
+  if (state.toast) {
+    app.appendChild(h("div", { className: "toast" + (state.toast.isError ? " error" : "") }, state.toast.msg));
+  }
+}
+
+// Init
+loadBookings();
+</script>
+</body>
+</html>
