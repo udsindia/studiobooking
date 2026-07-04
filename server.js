@@ -61,7 +61,16 @@ app.put("/api/bookings/:id", (req, res) => {
   const idx = db.bookings.findIndex(b => b.id === +req.params.id);
   if (idx === -1) return res.status(404).json({ error: "Not found" });
   const existing = db.bookings[idx];
-  const updated = { ...existing, ...req.body, id: existing.id, date: existing.date, start_hour: existing.start_hour };
+  const updated = { ...existing, ...req.body, id: existing.id };
+  updated.hours = updated.hours || 1;
+
+  // Conflict check (excluding this booking itself)
+  const conflicts = db.bookings.filter(b =>
+    b.id !== existing.id && b.date === updated.date && b.status !== "cancelled" &&
+    b.start_hour < updated.start_hour + updated.hours && b.start_hour + b.hours > updated.start_hour
+  );
+  if (conflicts.length) return res.status(409).json({ error: "Time slot conflict", conflicts });
+
   db.bookings[idx] = updated;
   writeDB(db);
   res.json(updated);

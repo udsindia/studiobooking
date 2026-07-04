@@ -90,8 +90,8 @@
     padding-top: 4px; font-variant-numeric: tabular-nums;
   }
   .slot {
-    border-top: 1px solid #22222c; min-height: 40px; padding: 2px; cursor: pointer;
-    transition: background 0.1s;
+    border-top: 1px solid #22222c; height: 40px; padding: 2px; cursor: pointer;
+    transition: background 0.1s; position: relative;
   }
   .slot:hover { background: rgba(255,255,255,0.02); }
   .slot.occupied { background: rgba(74,58,255,0.04); cursor: default; }
@@ -100,7 +100,7 @@
     background: linear-gradient(135deg, #3a2edd 0%, #5a4aff 100%);
     color: #fff; border-radius: 6px; padding: 3px 6px; font-size: 11px;
     cursor: pointer; font-weight: 500; line-height: 1.3; overflow: hidden;
-    position: relative; z-index: 2;
+    position: absolute; top: 2px; left: 2px; right: 2px; z-index: 2;
   }
   .booking-chip .chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .booking-chip .chip-hours { font-size: 9px; opacity: 0.7; margin-top: 1px; }
@@ -227,7 +227,7 @@ let state = {
   selectedDay: new Date(),
   modal: null, // null | "new" | booking object
   selectedSlot: null,
-  form: { name:"", email:"", phone:"", hours:1, status:"confirmed", notes:"" },
+  form: { name:"", email:"", phone:"", startDate:"", endDate:"", start_hour:8, hours:1, status:"confirmed", notes:"" },
   toast: null,
 };
 
@@ -278,32 +278,54 @@ function getBookingsForSlot(d, hour) {
 
 function openNew(d, hour) {
   state.selectedSlot = { date: d, hour };
-  state.form = { name:"", email:"", phone:"", hours:1, status:"confirmed", notes:"" };
+  const dk = dateKey(d);
+  state.form = { name:"", email:"", phone:"", startDate:dk, endDate:dk, start_hour:hour, hours:1, status:"confirmed", notes:"" };
   state.modal = "new";
   render();
 }
 function openEdit(booking, d) {
   state.selectedSlot = { date: d, hour: booking.start_hour };
-  state.form = { name:booking.name, email:booking.email, phone:booking.phone, hours:booking.hours, status:booking.status, notes:booking.notes };
+  state.form = { name:booking.name, email:booking.email, phone:booking.phone, startDate:booking.date, endDate:booking.date, start_hour:booking.start_hour, hours:booking.hours, status:booking.status, notes:booking.notes };
   state.modal = booking;
   render();
+}
+// Inclusive list of "YYYY-MM-DD" date keys from start to end (empty if invalid / reversed)
+function datesInRange(start, end) {
+  if (!start) return [];
+  if (!end) end = start;
+  const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return [];
+  const out = [], cur = new Date(s);
+  while (cur <= e && out.length < 90) { out.push(dateKey(cur)); cur.setDate(cur.getDate() + 1); }
+  return out;
 }
 function closeModal() { state.modal = null; render(); }
 
 async function handleSave() {
-  if (!state.form.name.trim()) return;
-  const slot = state.selectedSlot;
+  const f = state.form;
+  if (!f.name.trim()) return;
+  const payload = { name: f.name, email: f.email, phone: f.phone, start_hour: f.start_hour, hours: f.hours, status: f.status, notes: f.notes };
   try {
     if (state.modal === "new") {
-      await api("/api/bookings", {
-        method: "POST",
-        body: JSON.stringify({ date: dateKey(slot.date), name: state.form.name, email: state.form.email, phone: state.form.phone, start_hour: slot.hour, hours: state.form.hours, status: state.form.status, notes: state.form.notes })
-      });
-      showToast("Booking created");
+      const dates = datesInRange(f.startDate, f.endDate);
+      if (!dates.length) { showToast("Check the start / end dates", true); return; }
+      let created = 0; const skipped = [];
+      for (const date of dates) {
+        try {
+          await api("/api/bookings", { method: "POST", body: JSON.stringify({ ...payload, date }) });
+          created++;
+        } catch(e) { skipped.push(date); }
+      }
+      if (!created) { showToast("No bookings created — all slots conflict", true); return; }
+      showToast(
+        (created > 1 ? `Created ${created} bookings` : "Booking created") +
+        (skipped.length ? ` · ${skipped.length} skipped (conflict)` : ""),
+        skipped.length > 0
+      );
     } else {
       await api(`/api/bookings/${state.modal.id}`, {
         method: "PUT",
-        body: JSON.stringify(state.form)
+        body: JSON.stringify({ ...payload, date: f.startDate })
       });
       showToast("Booking updated");
     }
@@ -385,7 +407,7 @@ function renderWeekView() {
       startsHere.forEach(b => {
         const chip = h("div", {
           className: "booking-chip border-" + b.status,
-          style: b.hours > 1 ? { height: (b.hours * 40 - 4) + "px" } : {},
+          style: { height: (b.hours * 40 - 4) + "px" },
           onClick: (e) => { e.stopPropagation(); openEdit(b, d); }
         },
           h("div", { className: "chip-name" }, b.name),
@@ -475,7 +497,6 @@ function renderDayView() {
 function renderModal() {
   if (!state.modal) return null;
   const isNew = state.modal === "new";
-  const slot = state.selectedSlot;
 
   function input(field, placeholder, type) {
     const el = h("input", { className: "field-input", placeholder, type: type||"text", value: state.form[field] });
@@ -490,10 +511,21 @@ function renderModal() {
       el.appendChild(opt);
     });
     el.addEventListener("change", e => {
-      state.form[field] = field === "hours" ? +e.target.value : e.target.value;
+      state.form[field] = (field === "hours" || field === "start_hour") ? +e.target.value : e.target.value;
     });
     return el;
   }
+  function dateInput(field) {
+    const el = h("input", { className: "field-input", type: "date", value: state.form[field] || "" });
+    el.addEventListener("change", e => { state.form[field] = e.target.value; });
+    return el;
+  }
+  function labeled(text, node) {
+    return h("div", null, h("label", { className: "field-label" }, text), node);
+  }
+  const startTimeSelect = () => select("start_hour", HOURS.map((hr, i) => [hr, SLOT_LABELS[i]]));
+  const durationSelect = () => select("hours", [[1,"1 hour"],[2,"2 hours"],[3,"3 hours"],[4,"4 hours"],[5,"5 hours"],[6,"6 hours"]]);
+  const statusSelect = () => select("status", [["confirmed","Confirmed"],["pending","Pending"],["cancelled","Cancelled"]]);
 
   const textarea = h("textarea", { className: "field-textarea", placeholder: "Equipment needs, special requests...", rows: "2", value: state.form.notes });
   textarea.addEventListener("input", e => { state.form.notes = e.target.value; });
@@ -503,28 +535,28 @@ function renderModal() {
   actions.appendChild(h("button", { className: "btn btn-ghost", onClick: closeModal }, "Cancel"));
   actions.appendChild(h("button", { className: "btn btn-primary", onClick: handleSave }, "Save"));
 
+  const dateTimeFields = isNew
+    ? [
+        h("div", { className: "field-row" }, labeled("Start date", dateInput("startDate")), labeled("End date", dateInput("endDate"))),
+        h("div", { className: "field-row" }, labeled("Start time", startTimeSelect()), labeled("Duration", durationSelect())),
+        labeled("Status", statusSelect()),
+      ]
+    : [
+        h("div", { className: "field-row" }, labeled("Date", dateInput("startDate")), labeled("Start time", startTimeSelect())),
+        h("div", { className: "field-row" }, labeled("Duration", durationSelect()), labeled("Status", statusSelect())),
+      ];
+
   const overlay = h("div", { className: "modal-overlay", onClick: closeModal },
     h("div", { className: "modal", onClick: e => e.stopPropagation() },
       h("h2", null, isNew ? "New Booking" : "Edit Booking"),
-      h("div", { className: "slot-info" },
-        DAYS[slot.date.getDay()] + ", " + MONTHS[slot.date.getMonth()] + " " + slot.date.getDate() + " at " + SLOT_LABELS[slot.hour - 8]
-      ),
+      isNew ? h("div", { className: "slot-info" }, "Pick a single day, or a date range to repeat the booking on each day.") : null,
+      ...dateTimeFields,
       h("label", { className: "field-label" }, "Client name *"),
       input("name", "Name"),
       h("label", { className: "field-label" }, "Email"),
       input("email", "email@example.com", "email"),
       h("label", { className: "field-label" }, "Phone"),
       input("phone", "+91 98765 43210", "tel"),
-      h("div", { className: "field-row" },
-        h("div", null,
-          h("label", { className: "field-label" }, "Duration"),
-          select("hours", [[1,"1 hour"],[2,"2 hours"],[3,"3 hours"],[4,"4 hours"],[5,"5 hours"],[6,"6 hours"]])
-        ),
-        h("div", null,
-          h("label", { className: "field-label" }, "Status"),
-          select("status", [["confirmed","Confirmed"],["pending","Pending"],["cancelled","Cancelled"]])
-        )
-      ),
       h("label", { className: "field-label" }, "Notes"),
       textarea,
       actions
